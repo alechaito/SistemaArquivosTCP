@@ -51,7 +51,7 @@ class Client(threading.Thread):
         data = "init"
         while len(data):
             data = self.con.recv(1024)
-            print("Client sent :"+ str(data) )
+            print("[+] Client sent :"+ str(data) )
 
 
 
