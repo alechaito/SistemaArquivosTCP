@@ -4,6 +4,8 @@ import traceback
 from _thread import *
 import threading
 import sys
+import os
+import shutil
 
 def main():
     tcp = TCP()
@@ -12,6 +14,7 @@ def main():
 
 class TCP():
     def __init__(self):
+        print("Initializing...")
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.HOST = '127.0.0.1'  
@@ -32,7 +35,10 @@ class TCP():
             con, cliente = self.socket.accept()
             client = Client(self.HOST, self.PORT, con) 
             client.start()
-
+            self.THREADS.append(client)
+        
+        for t in self.THREADS:
+            t.join()
     
 class Client(threading.Thread):
     def __init__(self, ip, port, con): 
@@ -40,20 +46,62 @@ class Client(threading.Thread):
         self.ip = ip 
         self.port = port
         self.con = con
-        self.WELCOME_MSG = "Welcome to the file server.."
+        self.MSG = "init"
+        self.WELCOME_MSG = "[+] Welcome to the file server.. \n"
+        self.INVOKE_ERROR = "[+] Command Not Found... \n"
         print("[+] New server socket thread started for "+ip+":"+str(port))
     
     def run(self):    
         print("[+] Connection from : "+self.ip+":"+str(self.port))
-        
         self.con.send(self.WELCOME_MSG.encode())
+        while len(self.MSG):
+            self.MSG = self.con.recv(1024).decode().rstrip()
+            print("[+] Client sent :"+ self.MSG )
+            self.invoke()
+    
+    def invoke(self):
+        ##COMMAND PATTERN: CMD,FILE_NAME,TO_PATH -> Example: mv,test.php,/var/www/
+        command = self.MSG.split(",")
+        ##CREATE FILE -> Command pattern: mkdir,file_or_directory_name,type
+        if(command[0] == 'mkdir'):
+            print(command[2])
+            if(command[2] == 0): ##FILE
+                os.mknod(command[1])
+            else: ##DIR
+                os.mkdir(command[1])
+        ##REMOVE FILE -> Command pattern: rm,file_or_directory_name,type
+        elif(command[0] == 'rm'):
+            ## TRY FIRST REMOVE FILE
+            try: 
+                os.remove(command[1])
+            except:
+                print("[+] Error...")
+            #####################
+            ## TRY REMOVE DIRECTORY
+            try:
+                shutil.rmtree(command[1])
+            except:
+                print("[+] Error...")
+        ##RENAME FILE -> Command pattern: mv,file_name,new_file_name
+        elif(command[0] == 'mv'):
+            result = "[+] Sucesso...\n"
+            os.rename(comamnd[1], command[2])
+        ##LIST FILE -> Command pattern: ls
+        elif(command[0] == 'ls'):
+            result = str(os.listdir())+"\n"
+            self.con.send(result.encode())
+        ##COPY FILE -> Command pattern: ls
+        elif(command[0] == 'ls'):
+            result = str(os.listdir())+"\n"
+            self.con.send(result.encode())
+        ##LIST FILE
+        elif(command[0] == 'quit'):
+            sys.exit()
+        else:
+            self.con.send(self.INVOKE_ERROR.encode())
 
-        data = "init"
-        while len(data):
-            data = self.con.recv(1024)
-            print("[+] Client sent :"+ str(data) )
 
-
-
-
-main()
+try:
+    main()
+except:
+    sys.exit()
