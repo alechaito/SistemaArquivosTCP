@@ -6,6 +6,7 @@ import threading
 import sys
 import os
 import shutil
+import socket
 
 def main():
     tcp = TCP()
@@ -24,11 +25,7 @@ class TCP():
 
     def server(self):
         orig = (self.HOST, self.PORT)
-        try:
-            self.socket.bind((self.HOST, self.PORT))
-        except:
-            print("Bind failed. Error : " + str(sys.exc_info()))
-            sys.exit()
+        self.socket.bind((self.HOST, self.PORT))
 
         self.socket.listen(5)
         while(True):
@@ -61,7 +58,7 @@ class Client(threading.Thread):
     
     def invoke(self):
         ##COMMAND PATTERN: CMD,FILE_NAME,TO_PATH -> Example: mv,test.php,/var/www/
-        command = self.MSG.split(",")
+        command = self.MSG.split(" ")
         ##CREATE FILE -> Command pattern: mkdir,file_or_directory_name,type
         if(command[0] == 'mkdir'):
             print(command[2])
@@ -90,18 +87,22 @@ class Client(threading.Thread):
         elif(command[0] == 'ls'):
             result = str(os.listdir())+"\n"
             self.con.send(result.encode())
-        ##COPY FILE -> Command pattern: ls
-        elif(command[0] == 'ls'):
-            result = str(os.listdir())+"\n"
-            self.con.send(result.encode())
+        ##COPY FILE OR DIRECTORY -> Command pattern: cp from to type
+        elif(command[0] == 'cp'):
+            if(command[3] == 0): # IS FILE
+                shutil.copy2(command[1], command[2])
+                result = "[+] Command sucess to copy file."
+                self.con.send(result.encode())
+            else: # IS DIRECTORY
+                shutil.copytree(command[1], command[2])
+                result = "[+] Command sucess to copy directory."
+                self.con.send(result.encode())
         ##LIST FILE
         elif(command[0] == 'quit'):
-            sys.exit()
+            sys.kill()
         else:
             self.con.send(self.INVOKE_ERROR.encode())
 
 
-try:
-    main()
-except:
-    sys.exit()
+
+main()
