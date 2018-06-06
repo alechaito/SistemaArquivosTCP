@@ -7,6 +7,11 @@ import sys
 import os
 import shutil
 import socket
+from distutils.dir_util import copy_tree
+
+threads = []
+output = []
+mutex = thread.allocate_lock()
 
 def main():
     tcp = TCP()
@@ -21,7 +26,6 @@ class TCP():
         self.HOST = '127.0.0.1'  
         self.PORT = 5000
         self.BUFFER = 1024
-        self.THREADS = []
 
     def server(self):
         orig = (self.HOST, self.PORT)
@@ -32,9 +36,9 @@ class TCP():
             con, cliente = self.socket.accept()
             client = Client(self.HOST, self.PORT, con) 
             client.start()
-            self.THREADS.append(client)
+            threads.append(client)
         
-        for t in self.THREADS:
+        for t in threads:
             t.join()
     
 class Client(threading.Thread):
@@ -46,57 +50,63 @@ class Client(threading.Thread):
         self.MSG = "init"
         self.WELCOME_MSG = "[+] Welcome to the file server.. \n"
         self.INVOKE_ERROR = "[+] Command Not Found... \n"
+        self.INVOKE_SUCCESS = "[+] Command succes... \n"
         print("[+] New server socket thread started for "+ip+":"+str(port))
     
-    def run(self):    
+    def run(self):
+        mutex.acquire()
         print("[+] Connection from : "+self.ip+":"+str(self.port))
         self.con.send(self.WELCOME_MSG.encode())
         while len(self.MSG):
             self.MSG = self.con.recv(1024).decode().rstrip()
             print("[+] Client sent :"+ self.MSG )
             self.invoke()
+        mutex.release()
     
     def invoke(self):
         ##COMMAND PATTERN: CMD,FILE_NAME,TO_PATH -> Example: mv,test.php,/var/www/
         command = self.MSG.split(" ")
         ##CREATE FILE -> Command pattern: mkdir,file_or_directory_name,type
         if(command[0] == 'mkdir'):
-            print(command[2])
             if(command[2] == 0): ##FILE
                 os.mknod(command[1])
+                self.con.send(self.INVOKE_SUCCESS.encode())
             else: ##DIR
                 os.mkdir(command[1])
-        ##REMOVE FILE -> Command pattern: rm,file_or_directory_name,type
+                self.con.send(self.INVOKE_SUCCESS.encode())
+        ##REMOVE FILE -> Command pattern: rm file_or_directory_name type
         elif(command[0] == 'rm'):
-            ## TRY FIRST REMOVE FILE
-            try: 
-                os.remove(command[1])
-            except:
-                print("[+] Error...")
-            #####################
-            ## TRY REMOVE DIRECTORY
-            try:
-                shutil.rmtree(command[1])
-            except:
-                print("[+] Error...")
-        ##RENAME FILE -> Command pattern: mv,file_name,new_file_name
+            if(command[2] == 0):
+                ## TRY REMOVE FILE
+                try: 
+                    os.remove(command[1])
+                    self.con.send(self.INVOKE_SUCCESS.encode())
+                except:
+                    print("[+] Error...")
+            else:
+                ## TRY REMOVE DIRECTORY
+                try:
+                    shutil.rmtree(command[1])
+                    self.con.send(self.INVOKE_SUCCESS.encode())
+                except:
+                    print("[+] Error...")
+        ##RENAME FILE -> Command pattern: mv file_name new_file_name
         elif(command[0] == 'mv'):
-            result = "[+] Sucesso...\n"
             os.rename(comamnd[1], command[2])
-        ##LIST FILE -> Command pattern: ls
+            self.con.send(self.INVOKE_SUCCESS.encode())
+        ##LIST FILE -> Command pattern: ls dir
         elif(command[0] == 'ls'):
-            result = str(os.listdir())+"\n"
+            result = str(os.listdir(command[1]))+"\n"
             self.con.send(result.encode())
+            self.con.send(self.INVOKE_SUCCESS.encode())
         ##COPY FILE OR DIRECTORY -> Command pattern: cp from to type
         elif(command[0] == 'cp'):
             if(command[3] == 0): # IS FILE
                 shutil.copy2(command[1], command[2])
-                result = "[+] Command sucess to copy file."
-                self.con.send(result.encode())
+                reself.con.send(self.INVOKE_SUCCESS.encode())
             else: # IS DIRECTORY
-                shutil.copytree(command[1], command[2])
-                result = "[+] Command sucess to copy directory."
-                self.con.send(result.encode())
+                copy_tree(command[1], command[2])
+                self.con.send(self.INVOKE_SUCCESS.encode())
         ##LIST FILE
         elif(command[0] == 'quit'):
             sys.kill()
