@@ -64,7 +64,7 @@ class Client(threading.Thread):
         mutex.release()
     
     def invoke(self):
-        ##COMMAND PATTERN: CMD,FILE_NAME,TO_PATH -> Example: mv,test.php,/var/www/
+        ##COMMAND PATTERN: CMD FILE_NAME TO_PATH TYPE -> Example: mv /home/test.php /var/www/
         command = self.MSG.split(" ")
         ##CREATE FILE -> Command pattern: mkdir,file_or_directory_name,type
         if(command[0] == 'mkdir'):
